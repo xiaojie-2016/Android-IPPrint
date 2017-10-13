@@ -1,2 +1,2 @@
 # Android-IPPrint
-Android IP 打印机实现
+Android 使用 ESC/POS 指令实现 IP 无驱打印
