@@ -1,13 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context="com.openproject.xiaojie.android_ipprint.MainActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <Button
+        android:id="@+id/set_ip"
+        android:layout_width="100dp"
         android:layout_height="wrap_content"
-        android:text="Hello World!" />
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentTop="true"
+        android:text="设置 IP" />
 
-</LinearLayout>
+    <EditText
+        android:id="@+id/ip_address"
+        android:text="192.168.4.15"
+        android:hint="输入 IP 端口默认 9100"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_toStartOf="@id/set_ip" />
+
+    <Button
+        android:id="@+id/connect_test"
+        android:layout_below="@id/set_ip"
+        android:text="连接打印机"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+</RelativeLayout>
