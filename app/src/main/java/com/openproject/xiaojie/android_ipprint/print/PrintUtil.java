@@ -1,15 +1,21 @@
 package com.openproject.xiaojie.android_ipprint.print;
 
+import android.util.Log;
+
 import com.orhanobut.logger.Logger;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import java.net.IDN;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 
 /**
  * 打印工具类
@@ -19,17 +25,17 @@ public final class PrintUtil {
 
     private Socket socket;
     private int netPort = 9100;   //default 9100  0X238c
-    private OutputStream stream;
     private String charSet = "GB18030";
-//    private String charSet = "GB2312";
-
+    //    private String charSet = "GB2312";
     private int Net_SendTimeout = 1000;
+
     private int ConnectTimeout = 20000;
     private int Net_ReceiveTimeout = 1000;
     private String command = ""; //打印命令字符串
     private byte[] outbytes; //传输的命令集
-
     PrinterCMD pcmd = new PrinterCMD();
+    private OutputStream stream;
+    private OutputStreamWriter writer;
 
     /**
      * 设置端口号，有默认值，除非自定义，否则不调用
@@ -38,6 +44,7 @@ public final class PrintUtil {
      */
     public PrintUtil netPort(int netPort) {
         this.netPort = netPort;
+        Log.e("PrintUtil", "netPort ([netPort]): " + netPort);
         return this;
     }
 
@@ -46,6 +53,7 @@ public final class PrintUtil {
      */
     public PrintUtil charSet(String charSet) {
         this.charSet = charSet;
+        Log.e("PrintUtil", "charSet ([charSet]): " + charSet);
         return this;
     }
 
@@ -67,8 +75,9 @@ public final class PrintUtil {
             socket.connect(ipe, Net_ReceiveTimeout);
             socket.setSoTimeout(Net_ReceiveTimeout);
         }
-        Logger.e(ipaddress + "  IP 打印机连接成功！");
+        Log.e("PrintUtil", "open ([ipaddress]): " + ipaddress);
         stream = socket.getOutputStream();
+        writer = new OutputStreamWriter(stream, Charset.forName(charSet));
         return this;
     }
 
@@ -85,6 +94,36 @@ public final class PrintUtil {
     }
 
     /**
+     * 获取打印机状态
+     */
+    public String getStatus2() throws IOException {
+//        String s = Integer.toBinaryString(BufferedReader.read());
+        writer.write(pcmd.CMD_ReturnStatus(1));
+        writer.write(pcmd.CMD_ReturnStatus(2));
+        writer.write(pcmd.CMD_ReturnStatus(3));
+        writer.write(pcmd.CMD_ReturnStatus(4));
+        writer.flush();
+        InputStream is = socket.getInputStream();
+        byte[] bytes = new byte[2];
+        int len;
+//        while ((len = is.read(bytes)) != -1) {
+//
+//            Log.e("PrintUtil", "getStatus2 ([]):   ccc" + Arrays.toString(bytes) + "  " + Integer.toBinaryString(bytes[0]));
+//        }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buffer = new byte[16];
+        while ((len = is.read(buffer)) != -1) {
+            Log.e("PrintUtil", "getStatus2 ([]): len" + len);
+            baos.write(buffer, 0, len);
+            baos.flush();
+            Log.e("PrintUtil", "getStatus2 ([]):   ccc  " + Arrays.toString(buffer) + "  " + Integer.toBinaryString(buffer[0]));
+        }
+        byte[] data = baos.toByteArray();
+        Log.e("PrintUtil", "getStatus2 ([]): " + Arrays.toString(data) + "  " + Integer.toBinaryString(data[0]));
+        return Arrays.toString(bytes);
+    }
+
+    /**
      * 打印机关闭
      */
     public void Close() throws IOException {
@@ -92,7 +131,27 @@ public final class PrintUtil {
             socket.close();
         if (stream != null)
             stream.close();
+        if (writer != null)
+            writer.close();
         socket = null;
+        Log.e("PrintUtil", "Close ([]): ");
+    }
+
+    /**
+     * 打印条形码
+     *
+     * @param value
+     * @return
+     * @throws IOException
+     */
+    public PrintUtil printBarCode(String value) throws IOException {
+        writer.write(0x1D);
+        writer.write(107);
+        writer.write(67);
+        writer.write(value.length());
+        writer.write(value);
+//        writer.flush();
+        return this;
     }
 
     /**
@@ -101,9 +160,9 @@ public final class PrintUtil {
      * @param qrData 二维码的内容
      * @throws IOException
      */
-    protected void qrCode(String qrData) throws IOException {
+    public PrintUtil printQrCode(String qrData) throws IOException {
         int moduleSize = 8;
-        int length = qrData.getBytes(charSet).length;
+        int length = qrData.getBytes(Charset.forName(charSet)).length;
         OutputStreamWriter writer = new OutputStreamWriter(stream, charSet);
 
         //打印二维码矩阵
@@ -141,7 +200,8 @@ public final class PrintUtil {
         writer.write(48); // m
 
         writer.flush();
-
+        Log.e("PrintUtil", "qrCode ([qrData]): " + qrData);
+        return this;
     }
 
     /**
@@ -149,6 +209,7 @@ public final class PrintUtil {
      */
     public PrintUtil Set() throws IOException {
         stream.write(pcmd.CMD_SetPos());
+        Log.e("PrintUtil", "Set ([]): ");
         return this;
     }
 
@@ -160,16 +221,22 @@ public final class PrintUtil {
      */
     public PrintUtil lineHeight(int n) throws IOException {
         stream.write(pcmd.CMD_SetLineHeight(n));
+        stream.flush();
+        Log.e("PrintUtil", "lineHeight ([n]): " + n);
         return this;
     }
 
     public PrintUtil setMargin(int x, int y) throws IOException {
         stream.write(pcmd.CMD_MarginSetting(x, y));
+        stream.flush();
+        Log.e("PrintUtil", "setMargin ([x, y]): " + x + ", " + y);
         return this;
     }
 
     public PrintUtil printTab() throws IOException {
         stream.write(pcmd.CMD_Tab());
+        stream.flush();
+        Log.e("PrintUtil", "printTab ([]): ");
         return this;
     }
 
@@ -186,6 +253,7 @@ public final class PrintUtil {
         stream.write(pcmd.CMD_AbsLocation(nl, nm));
         stream.write(text.getBytes(Charset.forName(charSet)));
         stream.flush();
+        Log.e("PrintUtil", "printAbsText ([text, nl, nm]): " + text + ", " + nl + ", " + nm);
         return this;
     }
 
@@ -207,11 +275,28 @@ public final class PrintUtil {
         outbytes = command.getBytes(Charset.forName(charSet)); //Charset.defaultCharset()); //forName("GB18030")
         stream.write(outbytes);
         stream.flush();
+        Log.e("PrintUtil", "printText ([pszString, nFontAlign, nFontSize]): " + pszString + ", " + nFontAlign + ", " + nFontSize);
         return this;
     }
 
-    public PrintUtil printText(String str) throws IOException {
-        stream.write(str.getBytes(Charset.forName(charSet)));
+    /**
+     * 打印文字
+     */
+    public PrintUtil printText(String text) throws IOException {
+        stream.write(text.getBytes(Charset.forName(charSet)));
+        stream.flush();
+        Log.e("PrintUtil", "printText ([text]): " + text);
+        return this;
+    }
+
+    /**
+     * 在新的一行输出文字
+     */
+    public PrintUtil printTextNewLine(String text) throws IOException {
+        stream.write(pcmd.CMD_Enter());
+        stream.write(text.getBytes(Charset.forName(charSet)));
+        stream.flush();
+        Log.e("PrintUtil", "printTextNewLine ([text]): " + text);
         return this;
     }
 
@@ -220,11 +305,14 @@ public final class PrintUtil {
      */
     public PrintUtil printEnter() throws IOException {
         stream.write(pcmd.CMD_Enter());
+        stream.flush();
+        Log.e("PrintUtil", "printEnter ([]): ");
         return this;
     }
 
     /**
-     * 网络打印机 切割
+     * 网络打印机 切割走纸
+     * 这个方法因为机器的型号不同效果也不一样，坑爹了，直接使用换行靠谱点
      *
      * @param pageNum 切割时，走纸行数
      */
@@ -234,6 +322,8 @@ public final class PrintUtil {
 
         stream.write(pcmd.CMD_CutPage());
         stream.write(pcmd.CMD_Enter());
+        stream.flush();
+        Log.e("PrintUtil", "CutPage ([pageNum]): " + pageNum);
         return this;
     }
 
@@ -249,6 +339,8 @@ public final class PrintUtil {
         for (int i = 0; i < lines; i++) {
             stream.write(pcmd.CMD_Enter());
         }
+        stream.flush();
+        Log.e("PrintUtil", "PrintNewLines ([lines]): " + lines);
         return this;
     }
 
@@ -336,6 +428,12 @@ public final class PrintUtil {
         /// </summary>
         /// <param name="nfontsize">0:正常大小 1:两倍高 2:两倍宽 3:两倍大小 4:三倍高 5:三倍宽 6:三倍大小 7:四倍高 8:四倍宽 9:四倍大小 10:五倍高 11:五倍宽 12:五倍大小</param>
         /// <returns></returns>
+
+        /**
+         *
+         * @param nfontsize 0:正常大小 1:两倍高 2:两倍宽 3:两倍大小 4:三倍高 5:三倍宽 6:三倍大小 7:四倍高 8:四倍宽 9:四倍大小 10:五倍高 11:五倍宽 12:五倍大小
+         * @return
+         */
         String CMD_FontSize(int nfontsize) {
             String _cmdstr = "";
 
@@ -473,6 +571,29 @@ public final class PrintUtil {
         /// 第八位：固定为0
         /// <returns></returns>
 
+        /**
+         * 我使用的机器是 爱宝 A-8007 80mm 热敏打印机
+         * 返回打印机的状态
+         *              打印机收到该命令后立即返回相关状态
+                 该命令尽量不要插在2个或更多字节的命令序列中。
+                 即使打印机被ESC =(选择外设)命令设置为禁止，该命令依然有效。
+                 打印机传送当前状态，每一状态用1个字节数据表示。
+                 打印机传送状态时并不确认主机是否收到。
+                 打印机收到该命令立即执行。
+                 该命令只对串口打印机有效。打印机在任何状态下收到该命令都立即执行。
+         *
+         * 网上找的这个命令的说明基本都是大坑比（参考上面灰色的注释返回值，实际操作根据打印机的不同返回的根本就不一样啊！！）
+         * 我输入指令后返回的是个十进制的数字，下面是获取4个状态测试后返回的
+         *  正常：[22, 18, 18, 18]
+         *  开盖：[30, 22, 18, 18]
+         *  缺纸：[30, 50, 18, 114] (盒盖状态)
+         * 大家看了这些数字可能一脸懵逼，我靠，我也很绝望啊
+         * 直到我不耐烦的时候，突然看见文档里面的数字好像有点意思哈 link -->/docs/POS-80-Series打印机编程手册.pdf
+         * 我就不多说了，自己看去
+         *
+         * @param num 1:当前打印机状态 2:脱机状态 3:错误状态 4:连续用纸传感器状态（传送纸状态）
+         * @return DLE EOT n
+         */
         public String CMD_ReturnStatus(int num) {
             return String.valueOf((char) 16) + (char) 4 + (char) num;
         }

@@ -6,6 +6,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
@@ -29,32 +30,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private Button serIp;
     private String ip;
     private Button connectTest;
-
-    @SuppressLint("HandlerLeak")
-    private Handler mHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what) {
-                case PRINT_OPEN:
-                    MyToast.showShort("打印机连接成功");
-                    break;
-                case PRINT_SET:
-                    MyToast.showShort("打印机初始化成功");
-                    break;
-                case PRINT_PRINT:
-                    MyToast.showShort("打印中...");
-                    break;
-                case PRINT_CLOSE:
-                    MyToast.showShort("打印结束");
-                    break;
-                case PRINT_STATUS:
-                    String status = msg.getData().getString("status");
-                    MyToast.showShort(status);
-                    break;
-            }
-        }
-    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,32 +59,15 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         Looper.prepare();   //子线程中使用handler
                         try {
                             printUtil.open(ip);
-                            mHandler.sendEmptyMessage(PRINT_OPEN);
-                            Thread.sleep(500);
                             printUtil.Set();
-                            mHandler.sendEmptyMessage(PRINT_SET);
-                            Thread.sleep(500);
-                            printUtil.printText("打印测试");
-                            mHandler.sendEmptyMessage(PRINT_PRINT);
-                            Message message = mHandler.obtainMessage();
-                            Bundle data = new Bundle();
-                            String status = printUtil.getStatus();
-                            com.orhanobut.logger.Logger.e(status);
-                            data.putString("status", status);
-                            message.setData(data);
-                            message.what = PRINT_STATUS;
-                            mHandler.sendMessage(message);
-                            Thread.sleep(500);
+                            printUtil.printTextNewLine("打印测试");
+                            printUtil.printQrCode("小熊快跑！").printEnter().printTextNewLine("ddddddddd").printEnter()
+                            .getStatus2();
+                            printUtil.printBarCode("1001111");
                             printUtil.CutPage(4);
-                            Thread.sleep(500);
                             printUtil.Close();
-                            mHandler.sendEmptyMessage(PRINT_CLOSE);
                         } catch (IOException e) {
-                            e.printStackTrace();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        } catch (IllegalArgumentException e) {
-                            e.printStackTrace();
+                            Log.e("MainActivity", "run (93): IO错误",e);
                         }
                         Looper.loop();
                     }
