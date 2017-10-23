@@ -2,15 +2,10 @@ package com.openproject.xiaojie.android_ipprint.print;
 
 import android.util.Log;
 
-import com.orhanobut.logger.Logger;
-
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
-import java.net.IDN;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketAddress;
@@ -22,6 +17,23 @@ import java.util.Arrays;
  * Created by xxj on 07/31.
  */
 public final class PrintUtil {
+
+    /**
+     * 正常
+     */
+    public static final String PRINT_NORMAL = "22181818";
+    /**
+     * 缺纸
+     */
+    public static final String PRINT_PAPER_SHORT = "305018114";
+    /**
+     * 开上盖
+     */
+    public static final String PRINT_OPEN_COVER = "30221818";
+    /**
+     * 缺纸并打开上盖
+     */
+    public static final String PRINT_COVER_PAPER_ERROR = "305418114";
 
     private Socket socket;
     private int netPort = 9100;   //default 9100  0X238c
@@ -85,42 +97,48 @@ public final class PrintUtil {
      * 获取打印机状态
      */
     public String getStatus() throws IOException {
-        InputStream stream = socket.getInputStream();
-        byte[] bytes = new byte[4];
-        stream.read(bytes);
-        stream.close();
-        socket.close();
-        return bytes[0] + "," + bytes[1] + "," + bytes[2] + "," + bytes[3] + ",";
-    }
-
-    /**
-     * 获取打印机状态
-     */
-    public String getStatus2() throws IOException {
-//        String s = Integer.toBinaryString(BufferedReader.read());
+        StringBuffer sb = new StringBuffer();
+        /*
+          1:当前打印机状态
+          正常返回 22
+          上盖打开 30
+          缺纸     30
+          上盖打开并缺纸 30
+         */
         writer.write(pcmd.CMD_ReturnStatus(1));
+        /*
+          2:脱机状态
+          正常状态 18
+          上盖打开 22
+          缺纸     50
+          上盖打开并缺纸 54
+         */
         writer.write(pcmd.CMD_ReturnStatus(2));
+        /*
+          3:错误状态
+          正常状态 18
+          上盖打开 18
+          缺纸     18
+          上盖打开并缺纸 18
+         */
         writer.write(pcmd.CMD_ReturnStatus(3));
+        /*
+          4:连续用纸传感器状态（传送纸状态）
+          正常状态 18
+          上盖打开 18
+          缺纸     114
+          上盖打开并缺纸  114
+         */
         writer.write(pcmd.CMD_ReturnStatus(4));
         writer.flush();
         InputStream is = socket.getInputStream();
-        byte[] bytes = new byte[2];
-        int len;
-//        while ((len = is.read(bytes)) != -1) {
-//
-//            Log.e("PrintUtil", "getStatus2 ([]):   ccc" + Arrays.toString(bytes) + "  " + Integer.toBinaryString(bytes[0]));
-//        }
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buffer = new byte[16];
-        while ((len = is.read(buffer)) != -1) {
-            Log.e("PrintUtil", "getStatus2 ([]): len" + len);
-            baos.write(buffer, 0, len);
-            baos.flush();
-            Log.e("PrintUtil", "getStatus2 ([]):   ccc  " + Arrays.toString(buffer) + "  " + Integer.toBinaryString(buffer[0]));
+        byte[] bytes = new byte[4];     //这里不同的机器可能不一样的
+        is.read(bytes);
+        for (int i = 0; i < 4; i++) {
+            sb.append(String.valueOf(bytes[i]));
         }
-        byte[] data = baos.toByteArray();
-        Log.e("PrintUtil", "getStatus2 ([]): " + Arrays.toString(data) + "  " + Integer.toBinaryString(data[0]));
-        return Arrays.toString(bytes);
+        Log.e("PrintUtil", "getStatus ([]): " + Arrays.toString(bytes));
+        return sb.toString();
     }
 
     /**
@@ -150,7 +168,7 @@ public final class PrintUtil {
         writer.write(67);
         writer.write(value.length());
         writer.write(value);
-//        writer.flush();
+        writer.flush();
         return this;
     }
 
@@ -207,9 +225,9 @@ public final class PrintUtil {
     /**
      * 网络打印机 初始化打印机
      */
-    public PrintUtil Set() throws IOException {
+    public PrintUtil set() throws IOException {
         stream.write(pcmd.CMD_SetPos());
-        Log.e("PrintUtil", "Set ([]): ");
+        Log.e("PrintUtil", "set ([]): ");
         return this;
     }
 
@@ -317,11 +335,13 @@ public final class PrintUtil {
      * @param pageNum 切割时，走纸行数
      */
     public PrintUtil CutPage(int pageNum) throws IOException {
-        stream.write(pcmd.CMD_PageGO(pageNum));
-        stream.write(pcmd.CMD_Enter());
+//        for (int i = 0; i < pageNum; i++) {
+//            printEnter();
+//        }
 
+        //这个走纸的指令坑爹呢？？
+        stream.write(pcmd.CMD_PageGO(pageNum));
         stream.write(pcmd.CMD_CutPage());
-        stream.write(pcmd.CMD_Enter());
         stream.flush();
         Log.e("PrintUtil", "CutPage ([pageNum]): " + pageNum);
         return this;
@@ -430,7 +450,6 @@ public final class PrintUtil {
         /// <returns></returns>
 
         /**
-         *
          * @param nfontsize 0:正常大小 1:两倍高 2:两倍宽 3:两倍大小 4:三倍高 5:三倍宽 6:三倍大小 7:四倍高 8:四倍宽 9:四倍大小 10:五倍高 11:五倍宽 12:五倍大小
          * @return
          */
@@ -574,19 +593,19 @@ public final class PrintUtil {
         /**
          * 我使用的机器是 爱宝 A-8007 80mm 热敏打印机
          * 返回打印机的状态
-         *              打印机收到该命令后立即返回相关状态
-                 该命令尽量不要插在2个或更多字节的命令序列中。
-                 即使打印机被ESC =(选择外设)命令设置为禁止，该命令依然有效。
-                 打印机传送当前状态，每一状态用1个字节数据表示。
-                 打印机传送状态时并不确认主机是否收到。
-                 打印机收到该命令立即执行。
-                 该命令只对串口打印机有效。打印机在任何状态下收到该命令都立即执行。
-         *
+         * 打印机收到该命令后立即返回相关状态
+         *         该命令尽量不要插在2个或更多字节的命令序列中。
+         *         即使打印机被ESC =(选择外设)命令设置为禁止，该命令依然有效。
+         *         打印机传送当前状态，每一状态用1个字节数据表示。
+         *         打印机传送状态时并不确认主机是否收到。
+         *         打印机收到该命令立即执行。
+         *         该命令只对串口打印机有效。打印机在任何状态下收到该命令都立即执行。
+         * <p>
          * 网上找的这个命令的说明基本都是大坑比（参考上面灰色的注释返回值，实际操作根据打印机的不同返回的根本就不一样啊！！）
          * 我输入指令后返回的是个十进制的数字，下面是获取4个状态测试后返回的
-         *  正常：[22, 18, 18, 18]
-         *  开盖：[30, 22, 18, 18]
-         *  缺纸：[30, 50, 18, 114] (盒盖状态)
+         * 正常：[22, 18, 18, 18]
+         * 开盖：[30, 22, 18, 18]
+         * 缺纸：[30, 50, 18, 114] (盒盖状态)
          * 大家看了这些数字可能一脸懵逼，我靠，我也很绝望啊
          * 直到我不耐烦的时候，突然看见文档里面的数字好像有点意思哈 link -->/docs/POS-80-Series打印机编程手册.pdf
          * 我就不多说了，自己看去
